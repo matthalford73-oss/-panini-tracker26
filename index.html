@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panini Tracker 26</title>
+<style>
+body{font-family:system-ui;margin:0;background:#f4f6f8;color:#111}
+header{background:#0b5;color:white;padding:16px;font-size:22px;font-weight:800}
+main{padding:14px 14px 80px}
+.card{background:white;border-radius:16px;padding:16px;margin:10px 0;box-shadow:0 2px 8px #0001}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.big{font-size:28px;font-weight:800}
+button{border:0;border-radius:12px;padding:12px 14px;font-weight:700;background:#0b5;color:white}
+textarea,input{width:100%;font-size:18px;padding:12px;border-radius:12px;border:1px solid #ccc;box-sizing:border-box}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;display:flex;border-top:1px solid #ddd}
+nav button{flex:1;background:white;color:#333;border-radius:0}
+nav button.active{color:#0b5}
+.sticker{padding:12px;border-radius:12px;text-align:center;font-weight:800;background:#ddd}
+.have{background:#b8f2c2}.spare{background:#a9d6ff}
+.small{font-size:12px;color:#555}
+</style>
+</head>
+<body>
+<header>Panini Tracker 26</header>
+<main id="app"></main>
+<nav>
+<button onclick="show('home')" id="tab-home">Home</button>
+<button onclick="show('add')" id="tab-add">Add</button>
+<button onclick="show('album')" id="tab-album">Album</button>
+<button onclick="show('swaps')" id="tab-swaps">Swaps</button>
+</nav>
+<script>
+const TEAMS=[
+["A","MEX","Mexico"],["A","RSA","South Africa"],["A","KOR","Korea Republic"],["A","CZE","Czechia"],
+["B","CAN","Canada"],["B","BIH","Bosnia-Herzegovina"],["B","QAT","Qatar"],["B","SUI","Switzerland"],
+["C","BRA","Brazil"],["C","MAR","Morocco"],["C","HAI","Haiti"],["C","SCO","Scotland"],
+["D","USA","USA"],["D","PAR","Paraguay"],["D","AUS","Australia"],["D","TUR","Türkiye"],
+["E","GER","Germany"],["E","CUW","Curaçao"],["E","CIV","Côte d'Ivoire"],["E","ECU","Ecuador"],
+["F","NED","Netherlands"],["F","JPN","Japan"],["F","SWE","Sweden"],["F","TUN","Tunisia"],
+["G","BEL","Belgium"],["G","EGY","Egypt"],["G","IRN","Iran"],["G","NZL","New Zealand"],
+["H","ESP","Spain"],["H","CPV","Cabo Verde"],["H","KSA","Saudi Arabia"],["H","URU","Uruguay"],
+["I","FRA","France"],["I","SEN","Senegal"],["I","IRQ","Iraq"],["I","NOR","Norway"],
+["J","ARG","Argentina"],["J","ALG","Algeria"],["J","AUT","Austria"],["J","JOR","Jordan"],
+["K","POR","Portugal"],["K","COD","Congo DR"],["K","UZB","Uzbekistan"],["K","COL","Colombia"],
+["L","ENG","England"],["L","CRO","Croatia"],["L","GHA","Ghana"],["L","PAN","Panama"]
+];
+
+const stickers=[];
+stickers.push({code:"00",section:"Opening"});
+for(let i=1;i<=18;i++)stickers.push({code:"FWC"+i,section:"FWC"});
+for(const [g,c,n] of TEAMS){
+ for(let i=1;i<=20;i++){
+  stickers.push({code:c+String(i).padStart(2,"0"),group:g,team:n,section:n});
+ }
+}
+for(let i=1;i<=12;i++)stickers.push({code:"CC"+i,section:"Coca-Cola"});
+
+let data=JSON.parse(localStorage.panini26||"{}");
+function qty(c){return data[c]||0}
+function save(){localStorage.panini26=JSON.stringify(data)}
+function norm(x){
+ x=x.trim().toUpperCase().replace(/\s+/g,"");
+ let m=x.match(/^([A-Z]{3})(\d{1,2})$/);
+ if(m)return m[1]+String(+m[2]).padStart(2,"0");
+ return x;
+}
+function stats(){
+ let owned=stickers.filter(s=>qty(s.code)>0).length;
+ let spare=stickers.reduce((a,s)=>a+Math.max(0,qty(s.code)-1),0);
+ return {total:stickers.length,owned,need:stickers.length-owned,spare,pct:Math.round(owned/stickers.length*1000)/10};
+}
+function show(page){
+ document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+ document.getElementById("tab-"+page).classList.add("active");
+ if(page==="home")home();
+ if(page==="add")add();
+ if(page==="album")album();
+ if(page==="swaps")swaps();
+}
+function home(){
+ let s=stats();
+ app.innerHTML=`<div class=card><div class=big>${s.owned} / ${s.total}</div><div>${s.pct}% complete</div></div>
+ <div class=grid>
+ <div class=card><div class=big>${s.need}</div><div>Need</div></div>
+ <div class=card><div class=big>${s.spare}</div><div>Spare stickers</div></div>
+ </div>
+ <button onclick="show('add')" style="width:100%;font-size:20px">Add Stickers</button>`;
+}
+function add(){
+ app.innerHTML=`<div class=card><h2>Add Stickers</h2>
+ <textarea id=entry rows=8 placeholder="BEL09&#10;ENG14&#10;CC4&#10;FWC7"></textarea>
+ <button onclick="process()" style="width:100%;margin-top:10px">Add</button>
+ <p id=result></p></div>`;
+}
+function process(){
+ let parts=entry.value.split(/[\s,]+/).map(norm).filter(Boolean);
+ let valid=0,newOnes=0,dupes=0,bad=[];
+ for(const p of parts){
+  let found=stickers.find(s=>s.code===p);
+  if(!found){bad.push(p);continue}
+  if(qty(p)===0)newOnes++;else dupes++;
+  data[p]=qty(p)+1;valid++;
+ }
+ save();
+ result.innerHTML=`✅ ${valid} added<br>New: ${newOnes}<br>Duplicates: ${dupes}`+(bad.length?`<br>Not found: ${bad.join(", ")}`:"");
+ entry.value="";
+}
+function album(){
+ let html=`<div class=card><h2>Album</h2>`;
+ for(const [g,c,n] of TEAMS){
+  let owned=stickers.filter(s=>s.team===n&&qty(s.code)>0).length;
+  html+=`<button style="margin:4px;background:#eee;color:#111" onclick="team('${c}')">${c} ${owned}/20</button>`;
+ }
+ html+=`<button style="margin:4px;background:#eee;color:#111" onclick="specials()">Specials</button></div>`;
+ app.innerHTML=html;
+}
+function tile(s){
+ let q=qty(s.code), cls=q>1?"spare":q===1?"have":"";
+ return `<div class="sticker ${cls}" onclick="inc('${s.code}')">${s.code}<br><span class=big>${q}</span></div>`;
+}
+function team(code){
+ let team=TEAMS.find(t=>t[1]===code);
+ let list=stickers.filter(s=>s.code.startsWith(code));
+ app.innerHTML=`<div class=card><button onclick="album()">Back</button><h2>${team[2]}</h2>
+ <div class=grid>${list.map(tile).join("")}</div></div>`;
+}
+function specials(){
+ let list=stickers.filter(s=>!s.team);
+ app.innerHTML=`<div class=card><button onclick="album()">Back</button><h2>Specials</h2>
+ <div class=grid>${list.map(tile).join("")}</div></div>`;
+}
+function inc(c){data[c]=(qty(c)+1)%6;save();album()}
+function swaps(){
+ let need=stickers.filter(s=>qty(s.code)===0).map(s=>s.code);
+ let spare=stickers.filter(s=>qty(s.code)>1).map(s=>`${s.code} ×${qty(s.code)-1}`);
+ app.innerHTML=`<div class=card><h2>Need</h2><textarea rows=8 readonly>${need.join("\\n")}</textarea></div>
+ <div class=card><h2>Spare</h2><textarea rows=8 readonly>${spare.join("\\n")}</textarea>
+ <button onclick="navigator.clipboard.writeText('Need:\\n${need.join("\\n")}\\n\\nSpare:\\n${spare.join("\\n")}')">Copy for WhatsApp</button></div>`;
+}
+show("home");
+</script>
+</body>
+</html>
